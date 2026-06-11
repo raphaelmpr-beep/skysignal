@@ -1,10 +1,6 @@
 FROM python:3.11-slim
 
-# Install system deps for psycopg2 + WeasyPrint
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc \
-    && rm -rf /var/lib/apt/lists/*
-
+# psycopg2-binary is self-contained; no system C libs needed
 WORKDIR /app
 
 COPY requirements.txt .
@@ -12,8 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Expose the port Railway / Render will bind
+# Expose the port Railway binds
 EXPOSE 8000
 
-# Production: no --reload, workers=2
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# Production: 1 worker (Railway free tier is memory-constrained)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

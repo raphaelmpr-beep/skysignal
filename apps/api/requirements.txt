@@ -9,7 +9,7 @@ uvicorn[standard]==0.29.0
 sqlalchemy==2.0.30
 psycopg2-binary==2.9.9
 alembic==1.13.1
-geoalchemy2==0.15.1
+# geoalchemy2 removed — using float lat/lon, no PostGIS
 
 # Auth
 python-jose[cryptography]==3.3.0
@@ -23,8 +23,8 @@ httpx==0.27.0
 pydantic[email]==2.7.1
 pydantic-settings==2.3.0
 
-# PDF generation (optional — falls back gracefully if not installed)
-weasyprint==62.2
+# PDF generation removed — WeasyPrint requires heavy C libs not in slim image
+# Reports fall back to HTML bytes
 
 # Utilities
 python-dotenv==1.0.1
