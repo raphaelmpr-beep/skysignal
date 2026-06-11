@@ -1,6 +1,12 @@
 import os
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("skysignal")
 from app.routers import (
     incidents, assessments, sources, evidence,
     map, analytics, reports, admin, salute, auth, watch_zones
@@ -48,6 +54,46 @@ app.include_router(salute.router,      prefix="/api/salute",      tags=["salute"
 app.include_router(watch_zones.router, prefix="/api/watch-zones", tags=["watch-zones"])
 
 
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
+    logger.error(f"Database error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Database error", "error": str(exc)[:500]},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_error_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error on {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": f"{type(exc).__name__}: {str(exc)[:400]}"},
+    )
+
+
 @app.get("/health", tags=["health"])
 def health():
     return {"status": "ok", "service": "skysignal-api", "version": "1.0.0"}
+
+
+@app.get("/health/db", tags=["health"])
+def health_db():
+    """Test database connectivity — useful for diagnosing Railway connection issues."""
+    from app.db import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT current_database(), version()"))
+            row = result.fetchone()
+            return {
+                "status": "ok",
+                "database": row[0],
+                "pg_version": row[1][:60],
+                "db_url_host": engine.url.host,
+            }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "error": str(e)[:500]},
+        )
