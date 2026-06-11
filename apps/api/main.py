@@ -113,3 +113,4 @@ def health_db():
             status_code=503,
             content={"status": "error", "error": str(e)[:500]},
         )
+
