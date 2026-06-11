@@ -265,7 +265,7 @@ export default function AssessmentDetailPage() {
                     className={`flex items-center justify-between p-2 rounded text-xs ${assessment.threat_tier === tier ? 'ring-1' : ''}`}
                     style={{
                       background: assessment.threat_tier === tier ? `${color}15` : 'transparent',
-                      ringColor: color,
+                      boxShadow: assessment.threat_tier === tier ? `0 0 0 1px ${color}` : 'none',
                     }}
                   >
                     <div className="flex items-center gap-2">

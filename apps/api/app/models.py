@@ -435,7 +435,7 @@ class Report(Base):
     pdf_path: Mapped[Optional[str]] = mapped_column("file_path", String(1000))
     html_content: Mapped[Optional[str]] = mapped_column(Text)
     metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
-    generated_by: Mapped[Optional[str]] = mapped_column(String(255))
+    # DB has no generated_by column — removed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="reports")

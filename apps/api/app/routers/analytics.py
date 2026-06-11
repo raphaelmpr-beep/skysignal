@@ -70,7 +70,7 @@ def analytics_kpi(
     # Count facilities with elevated/high threat assessments
     from app.models import FacilityAssessment
     high_signal_facilities = db.query(FacilityAssessment).filter(
-        FacilityAssessment.organization_id == org_id,
+        FacilityAssessment.org_id == org_id,
         FacilityAssessment.threat_tier.in_(["ELEVATED", "HIGH", "CRITICAL"]),
     ).count()
 
@@ -97,7 +97,10 @@ def analytics_timeline(
     current_user: dict = Depends(get_current_user),
 ):
     org_id = current_user["org_id"]
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    # Use the oldest incident date as floor so demo data (2024) always shows
+    oldest = db.query(func.min(Incident.occurred_at)).filter(Incident.org_id == org_id).scalar()
+    since_by_days = datetime.now(timezone.utc) - timedelta(days=days)
+    since = min(oldest, since_by_days) if oldest else since_by_days
 
     rows = (
         db.query(Incident)

@@ -120,7 +120,8 @@ export async function fetchHeatmap(params: MapFilters = {}): Promise<HeatmapPoin
 }
 
 export async function fetchWatchZones(): Promise<WatchZone[]> {
-  return apiFetch<WatchZone[]>('/api/watch-zones')
+  const raw = await apiFetch<{ items: WatchZone[] } | WatchZone[]>('/api/watch-zones')
+  return Array.isArray(raw) ? raw : (raw as { items: WatchZone[] }).items ?? []
 }
 
 // Assessments

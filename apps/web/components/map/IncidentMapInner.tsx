@@ -31,13 +31,13 @@ function HeatmapLayer({ points }: { points: HeatmapPoint[] }) {
     let layer: unknown = null
 
     async function addHeat() {
-      // @ts-expect-error leaflet.heat has no types
-      const L = await import('leaflet')
-      // @ts-expect-error leaflet.heat has no types
-      await import('leaflet.heat')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const L = await import('leaflet') as any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await import('leaflet.heat' as any)
 
       const heatData = points.map((p) => [p.lat, p.lng, p.intensity])
-      // @ts-expect-error leaflet.heat
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       layer = L.heatLayer(heatData, {
         radius: 25,
         blur: 15,
