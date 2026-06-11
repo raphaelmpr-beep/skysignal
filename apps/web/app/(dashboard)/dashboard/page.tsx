@@ -95,7 +95,7 @@ export default function DashboardPage() {
         />
         <KPICard
           title="Avg Confidence"
-          value={kpi ? `${Math.round(kpi.avg_confidence * 100)}%` : '—'}
+          value={kpi ? `${Math.round(kpi.avg_confidence)}%` : '—'}
           trend={kpi?.avg_confidence_change}
           icon={Zap}
           iconColor="text-teal"

@@ -90,10 +90,12 @@ class EvidenceRead(_OrmBase):
     incident_id: str
     source_id: Optional[str] = None
     evidence_type: str
-    content: Optional[str] = None
+    title: Optional[str] = None
     url: Optional[str] = None
-    file_path: Optional[str] = None
-    collected_at: Optional[datetime] = None
+    excerpt: Optional[str] = None
+    published_at: Optional[datetime] = None
+    credibility_score: Optional[int] = None
+    official_match_score: Optional[int] = None
     created_at: datetime
     source: Optional[SourceRead] = None
 
@@ -350,6 +352,7 @@ class AnalyticsKPI(BaseModel):
     pending_review: int
     avg_confidence: float
     high_signal_count: int  # confidence_tier in (VERIFIED, HIGH)
+    high_signal_facilities: int = 0  # alias for frontend KPI card
     incidents_by_severity: dict[str, int]
     incidents_this_month: int
     incidents_last_month: int

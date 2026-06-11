@@ -32,7 +32,7 @@ export function formatRelativeTime(dateStr: string) {
 }
 
 export function formatConfidence(score: number) {
-  return `${Math.round(score * 100)}%`
+  return `${Math.round(score)}%`
 }
 
 export function formatScore(score: number) {

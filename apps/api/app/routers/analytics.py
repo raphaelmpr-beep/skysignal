@@ -67,11 +67,19 @@ def analytics_kpi(
         Incident.occurred_at <= last_month_end,
     ).count()
 
+    # Count facilities with elevated/high threat assessments
+    from app.models import FacilityAssessment
+    high_signal_facilities = db.query(FacilityAssessment).filter(
+        FacilityAssessment.organization_id == org_id,
+        FacilityAssessment.threat_tier.in_(["ELEVATED", "HIGH", "CRITICAL"]),
+    ).count()
+
     return AnalyticsKPI(
         total_incidents=total,
         pending_review=pending,
         avg_confidence=round(avg_conf, 2),
         high_signal_count=high_signal,
+        high_signal_facilities=high_signal_facilities,
         incidents_by_severity=by_severity,
         incidents_this_month=this_month,
         incidents_last_month=last_month,

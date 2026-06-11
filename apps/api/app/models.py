@@ -204,14 +204,16 @@ class IncidentEvidence(Base):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
     incident_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
     source_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("sources.id", ondelete="SET NULL"))
-    # DB: role → evidence_type alias
+    # DB column: role
     evidence_type: Mapped[str] = mapped_column("role", String(50), default="DISCOVERY")
     title: Mapped[Optional[str]] = mapped_column(String(500))
-    content: Mapped[Optional[str]] = mapped_column(Text)
     url: Mapped[Optional[str]] = mapped_column(String(1000))
-    file_path: Mapped[Optional[str]] = mapped_column(String(1000))
-    collected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, default=dict)
+    excerpt: Mapped[Optional[str]] = mapped_column(Text)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    credibility_score: Mapped[Optional[int]] = mapped_column(Integer)
+    official_match_score: Mapped[Optional[int]] = mapped_column(Integer)
+    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
+    added_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     incident: Mapped["Incident"] = relationship("Incident", back_populates="evidence")

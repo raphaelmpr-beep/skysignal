@@ -136,7 +136,14 @@ export async function fetchAssessment(id: string): Promise<Assessment> {
 }
 
 export async function fetchAssessments(): Promise<Assessment[]> {
-  return apiFetch<Assessment[]>('/api/assessments')
+  // Backend returns paginated { total, items } — unwrap and normalize lat/lon → latitude/longitude
+  const raw = await apiFetch<{ items: Record<string, unknown>[] } | Record<string, unknown>[]>('/api/assessments')
+  const items: Record<string, unknown>[] = Array.isArray(raw) ? raw : (raw as { items: Record<string, unknown>[] }).items ?? []
+  return items.map((a) => ({
+    ...a,
+    latitude: a.latitude ?? a.lat,
+    longitude: a.longitude ?? a.lon,
+  })) as unknown as Assessment[]
 }
 
 export async function saveWatchZone(assessmentId: string): Promise<WatchZone> {

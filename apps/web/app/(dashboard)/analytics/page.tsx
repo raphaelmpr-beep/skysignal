@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KPICard title="Total Incidents" value={kpi?.total_incidents ?? '—'} icon={AlertTriangle} iconColor="text-orange-alert" loading={loading && !kpi} />
         <KPICard title="Pending Review" value={kpi?.pending_review ?? '—'} icon={Clock} iconColor="text-amber-pending" loading={loading && !kpi} />
-        <KPICard title="Avg Confidence" value={kpi ? `${Math.round(kpi.avg_confidence * 100)}%` : '—'} icon={Zap} iconColor="text-teal" loading={loading && !kpi} />
+        <KPICard title="Avg Confidence" value={kpi ? `${Math.round(kpi.avg_confidence)}%` : '—'} icon={Zap} iconColor="text-teal" loading={loading && !kpi} />
         <KPICard title="High Signal Facilities" value={kpi?.high_signal_facilities ?? '—'} icon={Building2} iconColor="text-green-confirmed" loading={loading && !kpi} />
       </div>
 
