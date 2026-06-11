@@ -185,7 +185,9 @@ export async function fetchSourceDistribution(): Promise<{ source: string; count
 
 // Sources
 export async function fetchSources(): Promise<Source[]> {
-  return apiFetch<Source[]>('/api/sources')
+  // Backend returns paginated { total, items } — unwrap
+  const raw = await apiFetch<{ items: Source[] } | Source[]>('/api/sources')
+  return Array.isArray(raw) ? raw : (raw as { items: Source[] }).items ?? []
 }
 
 export async function updateSourceActive(id: string, is_active: boolean): Promise<Source> {

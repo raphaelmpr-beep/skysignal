@@ -18,6 +18,10 @@ import { formatDate } from '@/lib/utils'
 import type { Source } from '@/lib/types'
 
 const SOURCE_TYPE_LABEL: Record<string, string> = {
+  FAA: 'FAA',
+  GDELT: 'GDELT',
+  MANUAL: 'Manual',
+  RSS: 'RSS Feed',
   OFFICIAL: 'Official',
   NEWS: 'News',
   SOCIAL_MEDIA: 'Social Media',
@@ -47,9 +51,10 @@ export default function SourcesPage() {
   }
 
   function credibilityColor(score: number) {
-    if (score >= 0.8) return 'text-green-400'
-    if (score >= 0.6) return 'text-teal'
-    if (score >= 0.4) return 'text-amber-400'
+    // score is 0-100
+    if (score >= 80) return 'text-green-400'
+    if (score >= 60) return 'text-teal'
+    if (score >= 40) return 'text-amber-400'
     return 'text-red-400'
   }
 
@@ -121,7 +126,7 @@ export default function SourcesPage() {
                       <div className="flex items-center gap-1.5">
                         <Star className="w-3 h-3 text-amber-400" />
                         <span className={`text-sm font-semibold tabular-nums ${credibilityColor(source.credibility_score)}`}>
-                          {(source.credibility_score * 100).toFixed(0)}%
+                          {source.credibility_score ?? 0}%
                         </span>
                       </div>
                     </TableCell>

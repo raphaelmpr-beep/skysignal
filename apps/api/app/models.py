@@ -112,6 +112,7 @@ class Source(Base):
     reliability_score: Mapped[Optional[int]] = mapped_column("credibility_score", Integer, default=50)
     is_official: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_fetched: Mapped[Optional[datetime]] = mapped_column("last_fetched_at", DateTime(timezone=True))
     fetch_config: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

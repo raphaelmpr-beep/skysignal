@@ -58,6 +58,7 @@ class SourceUpdate(BaseModel):
     url: Optional[str] = None
     is_official: Optional[bool] = None
     reliability_score: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class SourceRead(_OrmBase):
@@ -66,8 +67,20 @@ class SourceRead(_OrmBase):
     source_type: str
     url: Optional[str] = None
     is_official: bool
+    is_active: bool = True
     reliability_score: Optional[int] = None
+    # Alias reliability_score as credibility_score for frontend compatibility
+    credibility_score: Optional[int] = None
+    last_fetched: Optional[datetime] = None
     created_at: datetime
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        instance = super().model_validate(obj, **kwargs)
+        # Mirror reliability_score into credibility_score if not set
+        if instance.credibility_score is None and instance.reliability_score is not None:
+            instance.credibility_score = instance.reliability_score
+        return instance
 
 
 # ---------------------------------------------------------------------------
