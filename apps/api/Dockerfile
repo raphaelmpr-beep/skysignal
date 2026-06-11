@@ -1,15 +1,15 @@
 FROM python:3.11-slim
 
-# psycopg2-binary is self-contained; no system C libs needed
 WORKDIR /app
 
+# Copy only the API directory contents (Railway builds with apps/api/ as context
+# when rootDirectory is set, OR from repo root when not set)
+# This Dockerfile is designed to be built with apps/api/ as the Docker build context.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Expose the port Railway binds
 EXPOSE 8000
 
-# Production: 1 worker (Railway free tier is memory-constrained)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
