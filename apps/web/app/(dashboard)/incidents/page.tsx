@@ -41,6 +41,7 @@ export default function IncidentsPage() {
   const [dateTo, setDateTo]               = useState('')
   const [country, setCountry]             = useState('')
   const [usState, setUsState]             = useState('')
+  const [sourceTag, setSourceTag]         = useState('')
   const [page, setPage]                   = useState(1)
 
   const [data, setData]           = useState<PaginatedResponse<Incident> | null>(null)
@@ -58,24 +59,26 @@ export default function IncidentsPage() {
     if (country)        f.country          = country
     // US state maps to the region field on the backend
     if (usState)        f.region           = usState
+    if (sourceTag)      f.source_tag       = sourceTag as IncidentFilters['source_tag']
 
     setIsLoading(true)
     fetchIncidents(f as IncidentFilters)
       .then(setData)
       .catch(console.error)
       .finally(() => setIsLoading(false))
-  }, [searchTerm, severity, incidentType, confidenceTier, reviewStatus, dateFrom, dateTo, country, usState, page])
+  }, [searchTerm, severity, incidentType, confidenceTier, reviewStatus, dateFrom, dateTo, country, usState, sourceTag, page])
 
   const clearFilters = () => {
     setSearchTerm(''); setSeverity(''); setIncidentType('')
     setConfidenceTier(''); setReviewStatus('')
     setDateFrom(''); setDateTo('')
     setCountry(''); setUsState('')
+    setSourceTag('')
     setPage(1)
   }
 
   const hasFilters = searchTerm || severity || incidentType || confidenceTier ||
-    reviewStatus || dateFrom || dateTo || country || usState
+    reviewStatus || dateFrom || dateTo || country || usState || sourceTag
 
   const incidents = data?.items || []
   const total     = data?.total || 0
@@ -239,6 +242,20 @@ export default function IncidentsPage() {
                 <SelectItem value="APPROVED">Approved</SelectItem>
                 <SelectItem value="REJECTED">Rejected</SelectItem>
                 <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sourceTag} onValueChange={(v) => { setSourceTag(v === '_all' ? '' : v); setPage(1) }}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Data Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Sources</SelectItem>
+                <SelectItem value="faa">FAA Reports</SelectItem>
+                <SelectItem value="gdelt">GDELT / OSINT</SelectItem>
+                <SelectItem value="osint">OSINT (Manual)</SelectItem>
+                <SelectItem value="dfend">D-Fend Enrichment</SelectItem>
+                <SelectItem value="manual">Manual Seed</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -74,6 +74,7 @@ def list_incidents(
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
+    source_tag: Optional[str] = Query(None, description="Filter by source tag: 'faa', 'gdelt', 'osint', 'dfend', 'manual'"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -131,6 +132,18 @@ def list_incidents(
                 Incident.region.ilike(pattern),
             )
         )
+
+    # Source tag filter — matches against the tags JSONB array
+    if source_tag:
+        TAG_MAP = {
+            "faa":    "faa",
+            "gdelt":  "gdelt",
+            "osint":  "osint",
+            "dfend":  "dfend",
+            "manual": "manual-seed",
+        }
+        tag = TAG_MAP.get(source_tag.lower(), source_tag.lower())
+        q = q.filter(Incident.tags.contains([tag]))
 
     # Geo filter using bounding box (no PostGIS)
     if lat is not None and lon is not None and radius_miles is not None:
