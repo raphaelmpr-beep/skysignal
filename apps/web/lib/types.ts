@@ -23,6 +23,10 @@ export interface Incident {
   latitude?: number
   longitude?: number
   location_name?: string
+  city?: string
+  region?: string
+  country?: string
+  tags?: string[]
   sector?: string
   occurred_at: string
   created_at: string

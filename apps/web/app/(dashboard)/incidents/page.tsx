@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Search, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Search, X, ChevronLeft, ChevronRight, Loader2, GitMerge } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { IncidentTable } from '@/components/incidents/IncidentTable'
+import { MatchReviewPanel } from '@/components/review/MatchReviewPanel'
 import { fetchIncidents } from '@/lib/api'
 import type { Incident, PaginatedResponse, IncidentFilters } from '@/lib/types'
 
@@ -80,6 +81,40 @@ export default function IncidentsPage() {
   const total     = data?.total || 0
   const pages     = data?.pages || 1
 
+  // ── Review queue — PENDING incidents awaiting match review ──────────────
+  const [pendingQueue, setPendingQueue]   = useState<Incident[]>([])
+  const [reviewIndex, setReviewIndex]     = useState(0)
+  const [showReviewQueue, setShowReviewQueue] = useState(false)
+  const [pendingLoading, setPendingLoading] = useState(false)
+
+  const loadPendingQueue = useCallback(() => {
+    setPendingLoading(true)
+    fetchIncidents({ review_status: ['PENDING'], per_page: 20, page: 1 } as IncidentFilters)
+      .then(d => {
+        setPendingQueue(d.items || [])
+        setReviewIndex(0)
+        setShowReviewQueue(true)
+      })
+      .catch(console.error)
+      .finally(() => setPendingLoading(false))
+  }, [])
+
+  const handleReviewAction = useCallback((incidentId: string, action: 'linked' | 'skipped') => {
+    setPendingQueue(prev => {
+      const next = prev.filter(i => i.id !== incidentId)
+      // If queue is empty, close the panel
+      if (next.length === 0) setShowReviewQueue(false)
+      return next
+    })
+    setReviewIndex(0)
+    // Refresh main table to reflect updated confidence scores
+    if (action === 'linked') {
+      setPage(p => p) // triggers useEffect re-fetch
+    }
+  }, [])
+
+  const currentPending = pendingQueue[reviewIndex] ?? null
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -88,8 +123,52 @@ export default function IncidentsPage() {
           <h1 className="text-xl font-bold text-foreground">Incidents</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{total.toLocaleString()} total incidents</p>
         </div>
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-3">
+          {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={showReviewQueue ? () => setShowReviewQueue(false) : loadPendingQueue}
+            disabled={pendingLoading}
+            className="flex items-center gap-2 text-xs"
+          >
+            {pendingLoading
+              ? <Loader2 className="w-3 h-3 animate-spin" />
+              : <GitMerge className="w-3 h-3" />}
+            {showReviewQueue ? 'Close Review' : `Review Queue${pendingQueue.length > 0 ? ` (${pendingQueue.length})` : ''}`}
+          </Button>
+        </div>
       </div>
+
+      {/* Match Review Queue */}
+      {showReviewQueue && currentPending && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">
+              Match Review Queue — {pendingQueue.length} pending
+            </p>
+            <div className="flex items-center gap-2">
+              {pendingQueue.length > 1 && (
+                <div className="flex items-center gap-1">
+                  {pendingQueue.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setReviewIndex(i)}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        i === reviewIndex ? 'bg-blue-400' : 'bg-zinc-700 hover:bg-zinc-500'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <MatchReviewPanel
+            incident={currentPending as unknown as Parameters<typeof MatchReviewPanel>[0]['incident']}
+            onAction={handleReviewAction}
+          />
+        </div>
+      )}
 
       {/* Filters */}
       <Card>

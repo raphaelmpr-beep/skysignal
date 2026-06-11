@@ -1,6 +1,16 @@
 """
 ConfidenceService — recomputes the confidence score for an incident
-based on its evidence records.
+based on its evidence records, using the corroboration scoring model.
+
+Formula (from corroboration_scoring.md):
+  base        = sum(source_credibility * role_multiplier for each evidence row)
+  normalized  = min(100, (base / NORMALIZATION_FACTOR) * 100)
+  bonus       = min(20, (independent_confirming_source_types - 1) * 10)
+  final       = min(100, round(normalized + bonus))
+
+NORMALIZATION_FACTOR = 120 ensures a single OFFICIAL_CONFIRMATION
+from FAA (credibility=90) yields ~75 (HIGH), not VERIFIED.
+Reaching VERIFIED requires independent corroboration.
 """
 
 from __future__ import annotations
@@ -9,36 +19,51 @@ from sqlalchemy.orm import Session
 
 from app.models import Incident, IncidentEvidence, Source
 
+# ── Constants ──────────────────────────────────────────────────────────────
+NORMALIZATION_FACTOR = 120.0
+
+ROLE_MULTIPLIERS: dict[str, float] = {
+    "OFFICIAL_CONFIRMATION": 1.0,
+    "CORROBORATION":         0.6,
+    "DISCOVERY":             0.3,
+    "CONTRADICTION":        -0.4,
+    "DUPLICATE":             0.0,
+    "REJECTION_SUPPORT":     0.0,
+}
+
+# Tiers ordered high → low so first match wins
+TIER_THRESHOLDS = [
+    (80, "VERIFIED"),
+    (65, "HIGH"),
+    (45, "MEDIUM"),
+    (25, "LOW"),
+    (0,  "UNVERIFIED"),
+]
+
+# Roles that count toward the corroboration bonus
+CONFIRMING_ROLES = {"OFFICIAL_CONFIRMATION", "CORROBORATION"}
+
+# Roles excluded from score computation
+EXCLUDED_ROLES = {"DUPLICATE", "REJECTION_SUPPORT"}
+
 
 def _tier(score: int) -> str:
-    if score >= 80:
-        return "VERIFIED"
-    if score >= 60:
-        return "HIGH"
-    if score >= 40:
-        return "MEDIUM"
-    if score >= 20:
-        return "LOW"
+    for threshold, label in TIER_THRESHOLDS:
+        if score >= threshold:
+            return label
     return "UNVERIFIED"
 
 
 class ConfidenceService:
+    """
+    Recomputes confidence for an incident from its attached evidence.
+    Call recompute() after any insert/update to incident_evidence.
+    """
+
     def recompute(self, incident_id: str, db: Session) -> int:
         """
-        Recalculate confidence score for an incident based on its evidence.
-
-        Scoring rules:
-          - OFFICIAL_CONFIRMATION evidence from official source: +40
-          - CORROBORATION from official source: +20
-          - CORROBORATION from non-official source: +10
-          - DISCOVERY only (no other evidence): base 20
-          - CONTRADICTION evidence: -15
-          - Multiple corroborating sources (2nd, 3rd, 4th+): +5 per additional,
-            up to +20
-
-        Score is capped at [0, 100].
-        Updates incident.confidence_score and confidence_tier in-place.
-        Returns the new score.
+        Recalculate confidence_score and confidence_tier for incident_id.
+        Updates the incident in-place. Returns the new score.
         """
         evidences = (
             db.query(IncidentEvidence)
@@ -47,7 +72,6 @@ class ConfidenceService:
         )
 
         if not evidences:
-            # No evidence — leave at 0
             inc = db.query(Incident).filter(Incident.id == incident_id).first()
             if inc:
                 inc.confidence_score = 0
@@ -55,60 +79,87 @@ class ConfidenceService:
                 db.commit()
             return 0
 
-        # Load associated sources for is_official lookup
+        # Load sources for credibility lookup
         source_ids = [e.source_id for e in evidences if e.source_id]
         sources_by_id: dict[str, Source] = {}
         if source_ids:
-            source_objs = db.query(Source).filter(Source.id.in_(source_ids)).all()
-            sources_by_id = {s.id: s for s in source_objs}
+            sources_by_id = {
+                s.id: s
+                for s in db.query(Source).filter(Source.id.in_(source_ids)).all()
+            }
 
-        score = 0
-        corroboration_count = 0
-        has_discovery = False
+        base = 0.0
+        confirming_source_types: set[str] = set()
 
         for ev in evidences:
-            ev_type = (ev.evidence_type or "").upper()
+            role = (ev.role or "DISCOVERY").upper()
+            if role in EXCLUDED_ROLES:
+                continue
+
+            multiplier = ROLE_MULTIPLIERS.get(role, 0.0)
             src = sources_by_id.get(ev.source_id) if ev.source_id else None
-            is_official = src.is_official if src else False
+            credibility = src.credibility_score if (src and src.credibility_score) else 40
 
-            if ev_type == "OFFICIAL_CONFIRMATION":
-                if is_official:
-                    score += 40
-                else:
-                    score += 20  # claims official confirmation but source isn't verified official
+            base += credibility * multiplier
 
-            elif ev_type == "CORROBORATION":
-                if is_official:
-                    score += 20
-                else:
-                    score += 10
-                corroboration_count += 1
+            # Track independent source types that are confirming
+            if role in CONFIRMING_ROLES and src:
+                confirming_source_types.add(src.source_type)
 
-            elif ev_type == "DISCOVERY":
-                has_discovery = True
-                # Discovery alone gives base score below
+        # Normalize to 0–100
+        normalized = min(100.0, (base / NORMALIZATION_FACTOR) * 100.0)
 
-            elif ev_type == "CONTRADICTION":
-                score -= 15
+        # Corroboration bonus: +10 per independent confirming source type beyond first
+        bonus = min(20, max(0, (len(confirming_source_types) - 1) * 10))
 
-            # MEDIA and DOCUMENT don't directly affect score unless combined
-
-        # Base score for discovery-only case
-        if has_discovery and score == 0:
-            score = 20
-
-        # Bonus for multiple corroborating sources (beyond the first)
-        if corroboration_count > 1:
-            bonus = min(20, (corroboration_count - 1) * 5)
-            score += bonus
-
-        score = max(0, min(100, score))
-        tier = _tier(score)
+        final = min(100, max(0, round(normalized + bonus)))
+        tier = _tier(final)
 
         inc = db.query(Incident).filter(Incident.id == incident_id).first()
         if inc:
-            inc.confidence_score = score
+            inc.confidence_score = final
             inc.confidence_tier = tier
             db.commit()
 
-        return score
+        return final
+
+    def upgrade_discovery_to_corroboration(
+        self, incident_id: str, db: Session
+    ) -> int:
+        """
+        When a new CORROBORATION or OFFICIAL_CONFIRMATION evidence is added,
+        upgrade all existing DISCOVERY rows to CORROBORATION.
+        Returns count of rows upgraded.
+        """
+        rows = (
+            db.query(IncidentEvidence)
+            .filter(
+                IncidentEvidence.incident_id == incident_id,
+                IncidentEvidence.role == "DISCOVERY",
+            )
+            .all()
+        )
+        for row in rows:
+            row.role = "CORROBORATION"
+        db.commit()
+        return len(rows)
+
+    def check_duplicate(
+        self, incident_id: str, url: str | None, source_id: str | None, db: Session
+    ) -> bool:
+        """
+        Returns True if an evidence row with the same url or source_id
+        already exists for this incident (duplicate detection).
+        """
+        q = db.query(IncidentEvidence).filter(
+            IncidentEvidence.incident_id == incident_id
+        )
+        if url:
+            q_url = q.filter(IncidentEvidence.url == url).first()
+            if q_url:
+                return True
+        if source_id:
+            q_src = q.filter(IncidentEvidence.source_id == source_id).first()
+            if q_src:
+                return True
+        return False

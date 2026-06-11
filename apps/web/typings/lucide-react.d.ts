@@ -123,6 +123,7 @@ declare module 'lucide-react' {
   export const MinusCircle: LucideIcon
   export const GitMerge: LucideIcon
   export const GitBranch: LucideIcon
+  export const SkipForward: LucideIcon
   export const Thermometer: LucideIcon
   export const ThermometerSun: LucideIcon
   export const ThermometerSnowflake: LucideIcon
