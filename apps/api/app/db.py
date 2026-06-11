@@ -2,7 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-_raw_url = os.getenv("DATABASE_URL", "postgresql://skysignal:skysignal@db:5432/skysignal")
+_raw_url = os.getenv("DATABASE_URL", "postgresql://skysignal:skysignal@db:5432/skysignal").strip()
 
 # Supabase pooler URLs use port 6543 with pgbouncer in transaction mode,
 # which is incompatible with SQLAlchemy's default connection args.
