@@ -6,6 +6,7 @@ Supports SKIP_AUTH=true dev bypass.
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,8 +24,12 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24h
 SKIP_AUTH = os.getenv("SKIP_AUTH", "false").lower() == "true"
 
-DEV_ORG_ID = os.getenv("DEV_ORG_ID", "00000000-0000-0000-0000-000000000001")
-DEV_USER_ID = os.getenv("DEV_USER_ID", "00000000-0000-0000-0000-000000000002")
+def _strip_unicode_ws(s: str) -> str:
+    """Strip all Unicode whitespace variants (including U+2009 thin space from mobile paste)."""
+    return re.sub(r'^[\s\u00a0\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]+|[\s\u00a0\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]+$', '', s)
+
+DEV_ORG_ID = _strip_unicode_ws(os.getenv("DEV_ORG_ID", "00000000-0000-0000-0000-000000000001"))
+DEV_USER_ID = _strip_unicode_ws(os.getenv("DEV_USER_ID", "00000000-0000-0000-0000-000000000002"))
 
 DEV_USER = {
     "sub": DEV_USER_ID,
