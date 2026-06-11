@@ -39,10 +39,19 @@ const CustomTooltip = ({ active, payload, label }: {
 }
 
 export function IncidentTimeline({ data, stacked = false }: IncidentTimelineProps) {
-  const formattedData = data.map((d) => ({
-    ...d,
-    date: formatDate(d.date, 'MMM d'),
-  }))
+  const formattedData = data.map((d) => {
+    // Backend returns 'period' (e.g. '2024-W12' or '2024-10-01'); 'date' is legacy
+    const raw = d.period ?? d.date ?? ''
+    let label = raw
+    if (raw.includes('-W')) {
+      // ISO week: '2024-W12' → show as 'W12 2024'
+      const [yr, wk] = raw.split('-W')
+      label = `W${wk} '${yr.slice(2)}`
+    } else if (raw.length >= 10) {
+      try { label = formatDate(raw, 'MMM d') } catch { label = raw.slice(5, 10) }
+    }
+    return { ...d, date: label }
+  })
 
   if (stacked) {
     return (

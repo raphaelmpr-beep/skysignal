@@ -111,12 +111,24 @@ export async function addEvidence(id: string, evidence: {
 // Map
 export async function fetchMapIncidents(params: MapFilters = {}): Promise<{ incidents: Incident[]; total: number }> {
   const query = buildQuery(params as Record<string, unknown>)
-  return apiFetch<{ incidents: Incident[]; total: number }>(`/api/map/incidents${query}`)
+  // Backend returns a plain array of {id, lat, lon, ...} — wrap and normalize lat/lon field names
+  const raw = await apiFetch<Array<Record<string, unknown>> | { incidents: Incident[]; total: number }>(`/api/map/incidents${query}`)
+  if (Array.isArray(raw)) {
+    const incidents = raw.map(r => ({
+      ...r,
+      latitude: r.latitude ?? r.lat,
+      longitude: r.longitude ?? r.lon,
+    })) as unknown as Incident[]
+    return { incidents, total: incidents.length }
+  }
+  return raw as { incidents: Incident[]; total: number }
 }
 
 export async function fetchHeatmap(params: MapFilters = {}): Promise<HeatmapPoint[]> {
   const query = buildQuery(params as Record<string, unknown>)
-  return apiFetch<HeatmapPoint[]>(`/api/map/heatmap${query}`)
+  // Backend returns { lat, lon, weight } — normalize to { lat, lng, intensity }
+  const raw = await apiFetch<Array<{ lat: number; lon?: number; lng?: number; weight?: number; intensity?: number }>>(`/api/map/heatmap${query}`)
+  return raw.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon ?? 0, intensity: p.intensity ?? p.weight ?? 0.5 }))
 }
 
 export async function fetchWatchZones(): Promise<WatchZone[]> {
@@ -173,15 +185,36 @@ export async function fetchSankeyData(): Promise<SankeyData> {
 }
 
 export async function fetchSectorDistribution(): Promise<SectorDistributionItem[]> {
-  return apiFetch<SectorDistributionItem[]>('/api/analytics/sector-distribution')
+  // Backend returns { cisa_sector: {ENERGY: N, ...}, operational_sector: {...} }
+  // Normalize to SectorDistributionItem[] using operational_sector
+  const raw = await apiFetch<Record<string, Record<string, number>> | SectorDistributionItem[]>('/api/analytics/sector-distribution')
+  if (Array.isArray(raw)) return raw
+  const sectorMap = (raw as Record<string, Record<string, number>>).operational_sector
+    ?? (raw as Record<string, Record<string, number>>).cisa_sector
+    ?? {}
+  const total = Object.values(sectorMap).reduce((s, n) => s + n, 0) || 1
+  return Object.entries(sectorMap)
+    .map(([sector, count]) => ({ sector, count, percentage: (count / total) * 100 }))
+    .sort((a, b) => b.count - a.count)
 }
 
 export async function fetchConfidenceDistribution(): Promise<{ tier: string; count: number }[]> {
-  return apiFetch<{ tier: string; count: number }[]>('/api/analytics/confidence-distribution')
+  // Backend route is confidence-histogram, returns { HIGH: N, MEDIUM: N, ... }
+  const raw = await apiFetch<Record<string, number> | { tier: string; count: number }[]>('/api/analytics/confidence-histogram')
+  if (Array.isArray(raw)) return raw
+  const ORDER = ['VERIFIED', 'HIGH', 'MEDIUM', 'LOW', 'UNVERIFIED']
+  return ORDER
+    .filter(t => (raw as Record<string, number>)[t] !== undefined)
+    .map(tier => ({ tier, count: (raw as Record<string, number>)[tier] }))
 }
 
 export async function fetchSourceDistribution(): Promise<{ source: string; count: number }[]> {
-  return apiFetch<{ source: string; count: number }[]>('/api/analytics/source-distribution')
+  const raw = await apiFetch<Record<string, number> | { source: string; count: number }[]>('/api/analytics/source-distribution')
+  if (Array.isArray(raw)) return raw
+  // Normalize dict { FAA: 100, GDELT: 20 } → [{source, count}]
+  return Object.entries(raw as Record<string, number>)
+    .map(([source, count]) => ({ source, count }))
+    .sort((a, b) => b.count - a.count)
 }
 
 // Sources
@@ -200,7 +233,9 @@ export async function updateSourceActive(id: string, is_active: boolean): Promis
 
 // Reports
 export async function fetchReports(): Promise<Report[]> {
-  return apiFetch<Report[]>('/api/reports')
+  // Backend returns paginated { total, items } — unwrap
+  const raw = await apiFetch<{ items: Report[] } | Report[]>('/api/reports')
+  return Array.isArray(raw) ? raw : (raw as { items: Report[] }).items ?? []
 }
 
 export async function fetchReport(id: string): Promise<Report> {

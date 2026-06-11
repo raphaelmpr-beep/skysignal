@@ -138,8 +138,10 @@ export interface KPIData {
 }
 
 export interface TimelineDataPoint {
-  date: string
+  date?: string     // legacy field
+  period?: string   // backend returns 'period' e.g. '2024-W12'
   count: number
+  avg_confidence?: number
   critical?: number
   high?: number
   medium?: number
@@ -159,8 +161,8 @@ export interface SectorDistributionItem {
 
 export interface HeatmapPoint {
   lat: number
-  lng: number
-  intensity: number
+  lng: number       // normalized from 'lon'
+  intensity: number // normalized from 'weight'
 }
 
 export interface InfrastructureAsset {
