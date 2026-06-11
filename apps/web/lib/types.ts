@@ -191,6 +191,8 @@ export interface IncidentFilters {
   source_type?: SourceType[]
   date_from?: string
   date_to?: string
+  country?: string
+  region?: string
   page?: number
   per_page?: number
   sort_by?: string

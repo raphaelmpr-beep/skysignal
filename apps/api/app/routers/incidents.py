@@ -66,9 +66,11 @@ def list_incidents(
     confidence_tier: Optional[str] = None,
     cisa_sector: Optional[str] = None,
     operational_sector: Optional[str] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
+    date_from: Optional[str] = Query(None, description="ISO date or datetime, e.g. 2024-01-01"),
+    date_to: Optional[str] = Query(None, description="ISO date or datetime, e.g. 2024-12-31"),
     search: Optional[str] = None,
+    country: Optional[str] = None,
+    region: Optional[str] = None,
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
@@ -77,6 +79,19 @@ def list_incidents(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    from datetime import date as date_type
+    import re as _re
+
+    def _parse_dt(s: str, end_of_day: bool = False):
+        """Accept YYYY-MM-DD or full ISO datetime string."""
+        s = s.strip()
+        if _re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+            d = date_type.fromisoformat(s)
+            if end_of_day:
+                return datetime(d.year, d.month, d.day, 23, 59, 59)
+            return datetime(d.year, d.month, d.day, 0, 0, 0)
+        return datetime.fromisoformat(s.replace('Z', '+00:00'))
+
     effective_org_id = org_id or current_user["org_id"]
     q = db.query(Incident).filter(Incident.org_id == effective_org_id)
 
@@ -92,16 +107,24 @@ def list_incidents(
         q = q.filter(Incident.cisa_sector == cisa_sector)
     if operational_sector:
         q = q.filter(Incident.operational_sector == operational_sector)
+    if country:
+        q = q.filter(Incident.country.ilike(country))
+    if region:
+        # Support both abbreviation (WA) and partial full-name match
+        q = q.filter(or_(Incident.region.ilike(region), Incident.region.ilike(f"%{region}%")))
     if date_from:
-        q = q.filter(Incident.occurred_at >= date_from)
+        q = q.filter(Incident.occurred_at >= _parse_dt(date_from, end_of_day=False))
     if date_to:
-        q = q.filter(Incident.occurred_at <= date_to)
+        q = q.filter(Incident.occurred_at <= _parse_dt(date_to, end_of_day=True))
     if search:
         pattern = f"%{search}%"
         q = q.filter(
             or_(
                 Incident.title.ilike(pattern),
                 Incident.summary.ilike(pattern),
+                Incident.location_name.ilike(pattern),
+                Incident.city.ilike(pattern),
+                Incident.region.ilike(pattern),
             )
         )
 
