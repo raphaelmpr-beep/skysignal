@@ -1,3 +1,4 @@
+# skysignal-api v1.1.0 — source_tag filter
 import os
 import logging
 from fastapi import FastAPI, Request
