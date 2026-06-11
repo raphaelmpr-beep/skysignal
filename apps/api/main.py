@@ -74,7 +74,19 @@ async def generic_error_handler(request: Request, exc: Exception):
 
 @app.get("/health", tags=["health"])
 def health():
-    return {"status": "ok", "service": "skysignal-api", "version": "1.0.0"}
+    """Health check — also verifies DB connectivity so Railway catches failures early."""
+    from app.db import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Health DB check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "db": "unreachable", "error": str(e)[:200]},
+        )
+    return {"status": "ok", "service": "skysignal-api", "version": "1.0.0", "db": "ok"}
 
 
 @app.get("/health/db", tags=["health"])

@@ -22,6 +22,12 @@ elif "supabase" in _raw_url and "5432" in _raw_url:
 
 DATABASE_URL = _raw_url
 
+# Limit connection pool for Railway free tier (512MB RAM)
+_engine_kwargs["pool_size"] = 3
+_engine_kwargs["max_overflow"] = 2
+_engine_kwargs["pool_timeout"] = 30
+_engine_kwargs["pool_recycle"] = 300
+
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
