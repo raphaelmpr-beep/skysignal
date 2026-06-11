@@ -110,8 +110,12 @@ def list_incidents(
     if country:
         q = q.filter(Incident.country.ilike(country))
     if region:
-        # Support both abbreviation (WA) and partial full-name match
-        q = q.filter(or_(Incident.region.ilike(region), Incident.region.ilike(f"%{region}%")))
+        # 2-letter abbreviation: exact case-insensitive match
+        # Longer string: partial match (full state name)
+        if len(region) <= 3:
+            q = q.filter(Incident.region.ilike(region))
+        else:
+            q = q.filter(Incident.region.ilike(f"%{region}%"))
     if date_from:
         q = q.filter(Incident.occurred_at >= _parse_dt(date_from, end_of_day=False))
     if date_to:
