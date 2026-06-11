@@ -262,7 +262,6 @@ def _log(db: Session, user: dict, incident_id: str, action: str, details: Option
     log = AuditLog(
         org_id=user.get("org_id"),
         user_id=user.get("user_id"),
-        incident_id=incident_id,
         action=action,
         entity_type="incident",
         entity_id=incident_id,

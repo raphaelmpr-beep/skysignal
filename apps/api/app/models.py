@@ -165,14 +165,12 @@ class Incident(Base):
     tags: Mapped[Optional[list]] = mapped_column(ARRAY(Text), default=list)
     classification_json: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     official_match_score: Mapped[Optional[int]] = mapped_column(Integer)
+    cisa_sector: Mapped[Optional[str]] = mapped_column(String(100))
+    cisa_subsector: Mapped[Optional[str]] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Virtual/computed properties for schema compatibility (not in DB)
-    @property
-    def cisa_sector(self):
-        return None
-
+    # Virtual properties for schema compatibility (not in DB)
     @property
     def facility_name(self):
         return None
@@ -193,7 +191,7 @@ class Incident(Base):
     source: Mapped[Optional["Source"]] = relationship("Source", back_populates="incidents")
     evidence: Mapped[list["IncidentEvidence"]] = relationship("IncidentEvidence", back_populates="incident", cascade="all, delete-orphan")
     salute_reports: Mapped[list["SaluteReport"]] = relationship("SaluteReport", back_populates="incident")
-    audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="incident")
+    # audit_logs relationship removed: AuditLog uses entity_id/entity_type, not incident_id FK
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +272,6 @@ class WatchZone(Base):
         nullable=False,
     )
     created_by: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
-    assessment_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("facility_assessments.id", ondelete="SET NULL"))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     facility_name: Mapped[Optional[str]] = mapped_column(String(500))
@@ -288,12 +285,19 @@ class WatchZone(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     cisa_sector: Mapped[Optional[str]] = mapped_column(String(100))
     operational_sector: Mapped[Optional[str]] = mapped_column(String(100))
-    alert_threshold: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Virtual properties for schema compat
+    @property
+    def assessment_id(self):
+        return None
+
+    @property
+    def alert_threshold(self):
+        return None
+
     organization: Mapped["Organization"] = relationship("Organization", back_populates="watch_zones")
-    assessment: Mapped[Optional["FacilityAssessment"]] = relationship("FacilityAssessment", back_populates="watch_zones")
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +357,6 @@ class FacilityAssessment(Base):
         return []
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="assessments")
-    watch_zones: Mapped[list["WatchZone"]] = relationship("WatchZone", back_populates="assessment")
     reports: Mapped[list["Report"]] = relationship("Report", back_populates="assessment")
 
 
@@ -450,15 +453,18 @@ class AuditLog(Base):
         ForeignKey("organizations.id"),
     )
     user_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("users.id"))
-    incident_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), ForeignKey("incidents.id"))
     entity_type: Mapped[Optional[str]] = mapped_column(String(100))
-    entity_id: Mapped[Optional[str]] = mapped_column(String(255))
+    entity_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False))
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[Optional[dict]] = mapped_column("new_values", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[Optional["User"]] = relationship("User", back_populates="audit_logs")
-    incident: Mapped[Optional["Incident"]] = relationship("Incident", back_populates="audit_logs")
+
+    # Virtual: incident_id not a real DB column in audit_logs — used by routers
+    @property
+    def incident_id(self):
+        return self.entity_id if self.entity_type == 'incident' else None
 
 
 # ---------------------------------------------------------------------------

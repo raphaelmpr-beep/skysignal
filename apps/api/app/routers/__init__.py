@@ -1,0 +1,1 @@
+from app.routers import watch_zones  # noqa: F401
