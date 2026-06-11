@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 28% 10%;
+    --foreground: 218 40% 92%;
+    --card: 220 28% 13%;
+    --card-foreground: 218 40% 92%;
+    --popover: 220 28% 13%;
+    --popover-foreground: 218 40% 92%;
+    --primary: 187 100% 39%;
+    --primary-foreground: 220 28% 10%;
+    --secondary: 220 28% 15%;
+    --secondary-foreground: 218 40% 92%;
+    --muted: 220 28% 15%;
+    --muted-foreground: 218 20% 60%;
+    --accent: 187 100% 39%;
+    --accent-foreground: 220 28% 10%;
+    --destructive: 22 75% 49%;
+    --destructive-foreground: 218 40% 92%;
+    --border: 218 20% 20%;
+    --input: 218 20% 18%;
+    --ring: 187 100% 39%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-navy text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0F1623;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.25);
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(22, 32, 48, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors;
+    color: #8A9BB5;
+  }
+  .nav-link:hover {
+    color: #E8EDF5;
+    background: rgba(255,255,255,0.06);
+  }
+  .nav-link.active {
+    color: #00B4C8;
+    background: rgba(0,180,200,0.1);
+  }
+
+  .stat-card {
+    @apply rounded-lg p-5 border;
+    background: #162030;
+    border-color: rgba(255,255,255,0.08);
+  }
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: #0F1623 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+.leaflet-tile {
+  filter: brightness(0.6) saturate(0.3) hue-rotate(180deg);
+}
+.leaflet-control-attribution {
+  background: rgba(15,22,35,0.8) !important;
+  color: #8A9BB5 !important;
+}
+.leaflet-control-zoom a {
+  background: #162030 !important;
+  color: #E8EDF5 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+.leaflet-popup-content-wrapper {
+  background: #162030 !important;
+  color: #E8EDF5 !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 8px !important;
+}
+.leaflet-popup-tip {
+  background: #162030 !important;
+}
