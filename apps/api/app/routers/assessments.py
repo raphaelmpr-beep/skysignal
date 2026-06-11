@@ -80,7 +80,7 @@ def create_assessment(
         repeat_pattern_score=result.factors.get("repeat_pattern"),
         incident_count=result.incident_count,
         explanation=result.explanation,
-        nearby_incidents_summary=result.factors,  # stored as JSONB
+        raw_factors=result.factors,
     )
     db.add(assessment)
     db.commit()

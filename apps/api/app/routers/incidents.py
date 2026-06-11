@@ -7,6 +7,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+import math
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
@@ -103,16 +105,13 @@ def list_incidents(
             )
         )
 
-    # Geo filter using PostGIS
+    # Geo filter using bounding box (no PostGIS)
     if lat is not None and lon is not None and radius_miles is not None:
-        radius_meters = radius_miles * MILES_TO_METERS
+        deg_per_mile = 1.0 / 69.0
+        margin = radius_miles * deg_per_mile * 1.2
         q = q.filter(
-            text(
-                "ST_DWithin("
-                "ST_MakePoint(incidents.lon, incidents.lat)::geography, "
-                "ST_MakePoint(:lon, :lat)::geography, "
-                ":radius)"
-            ).bindparams(lat=lat, lon=lon, radius=radius_meters)
+            Incident.lat.between(lat - margin, lat + margin),
+            Incident.lon.between(lon - margin, lon + margin),
         )
 
     total = q.count()

@@ -14,7 +14,12 @@ import uuid
 from datetime import datetime, timezone
 
 import psycopg2
-from psycopg2.extras import execute_values
+import psycopg2.extras
+from psycopg2.extras import execute_values, register_uuid
+from psycopg2.extensions import register_adapter, adapt
+
+# Register UUID adapter so psycopg2 sends uuid.UUID objects as proper UUID type
+register_uuid()
 
 # ---------------------------------------------------------------------------
 # Config
@@ -224,7 +229,6 @@ def seed(conn):
                operational_sector, severity, confidence_score, confidence_tier,
                review_status, occurred_at,
                latitude, longitude,
-               location,
                location_name, city, region, country,
                source_id, source_url,
                drone_type, drone_make, drone_model, altitude_agl,
@@ -234,7 +238,6 @@ def seed(conn):
                %s, %s, %s, %s,
                %s, %s,
                %s, %s,
-               {make_point_sql(lon, lat)}::geography,
                %s, %s, %s, %s,
                %s, %s,
                %s, %s, %s, %s,
@@ -340,11 +343,11 @@ def seed(conn):
             f"""
             INSERT INTO watch_zones
               (id, organization_id, created_by, name, description, facility_name, address,
-               latitude, longitude, center, radius_miles,
+               latitude, longitude, radius_miles,
                alert_on_new_incident, is_active, cisa_sector, operational_sector)
             VALUES
               (%s, %s, %s, %s, %s, %s, %s,
-               %s, %s, {make_point_sql(lon, lat)}::geography, %s,
+               %s, %s, %s,
                %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
             RETURNING id
@@ -379,11 +382,8 @@ def seed(conn):
         """
         SELECT id FROM incidents
         WHERE organization_id = %s
-          AND ST_DWithin(
-            location,
-            ST_SetSRID(ST_MakePoint(-82.5219, 27.8493), 4326)::geography,
-            50000  -- 50 km radius
-          )
+          AND latitude BETWEEN 27.4 AND 28.3
+          AND longitude BETWEEN -83.0 AND -82.0
         """,
         (org_id,),
     )
@@ -436,7 +436,7 @@ def seed(conn):
             70, 95, 65,
             # Context
             len(nearby_ids),
-            nearby_ids if nearby_ids else [],
+            [uuid.UUID(x) for x in nearby_ids] if nearby_ids else [],
             "DEFENSE_INDUSTRIAL_BASE",
             "MILITARY",
             (
