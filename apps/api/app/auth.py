@@ -130,3 +130,14 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
             detail="Admin role required",
         )
     return current_user
+
+
+def get_current_org_id(current_user: dict = Depends(get_current_user)) -> str:
+    """Extract org_id from the authenticated user — convenience dependency."""
+    org_id = current_user.get("org_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No organization associated with user",
+        )
+    return org_id
