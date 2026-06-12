@@ -1,4 +1,5 @@
 # skysignal-api v1.1.0 — source_tag filter
+import asyncio
 import os
 import logging
 from fastapi import FastAPI, Request
@@ -53,6 +54,57 @@ app.include_router(reports.router,     prefix="/api/reports",     tags=["reports
 app.include_router(admin.router,       prefix="/api/admin",       tags=["admin"])
 app.include_router(salute.router,      prefix="/api/salute",      tags=["salute"])
 app.include_router(watch_zones.router, prefix="/api/watch-zones", tags=["watch-zones"])
+
+
+_scheduled_ingest_task: asyncio.Task | None = None
+
+
+async def _scheduled_ingest_loop() -> None:
+    while True:
+        try:
+            interval = max(60, int(os.getenv("GDELT_SCHEDULE_INTERVAL_SECONDS", "900")))
+        except (TypeError, ValueError):
+            interval = 900
+
+        try:
+            result = await asyncio.to_thread(admin.run_scheduled_ingest_cycle)
+            logger.info("Scheduled ingest cycle finished: %s", result)
+        except Exception as exc:
+            logger.error("Scheduled ingest cycle failed: %s", exc)
+
+        await asyncio.sleep(interval)
+
+
+@app.on_event("startup")
+async def start_scheduled_ingest_worker() -> None:
+    global _scheduled_ingest_task
+    enabled = str(os.getenv("ENABLE_GDELT_SCHEDULED_INGEST", "true")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled:
+        logger.info("Scheduled ingest worker is disabled by env.")
+        return
+
+    if _scheduled_ingest_task is None or _scheduled_ingest_task.done():
+        _scheduled_ingest_task = asyncio.create_task(_scheduled_ingest_loop())
+        logger.info("Scheduled ingest worker started.")
+
+
+@app.on_event("shutdown")
+async def stop_scheduled_ingest_worker() -> None:
+    global _scheduled_ingest_task
+    if _scheduled_ingest_task is None:
+        return
+
+    _scheduled_ingest_task.cancel()
+    try:
+        await _scheduled_ingest_task
+    except asyncio.CancelledError:
+        pass
+    _scheduled_ingest_task = None
 
 
 @app.exception_handler(SQLAlchemyError)
