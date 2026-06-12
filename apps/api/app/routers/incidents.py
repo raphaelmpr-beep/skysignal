@@ -133,7 +133,7 @@ def list_incidents(
             )
         )
 
-    # Source tag filter — matches against the tags JSONB array
+    # Source tag filter — uses Postgres ANY() against the text[] array
     if source_tag:
         TAG_MAP = {
             "faa":    "faa",
@@ -143,7 +143,7 @@ def list_incidents(
             "manual": "manual-seed",
         }
         tag = TAG_MAP.get(source_tag.lower(), source_tag.lower())
-        q = q.filter(Incident.tags.contains([tag]))
+        q = q.filter(text(":tag = ANY(tags)").bindparams(tag=tag))
 
     # Geo filter using bounding box (no PostGIS)
     if lat is not None and lon is not None and radius_miles is not None:
