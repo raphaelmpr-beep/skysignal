@@ -8,6 +8,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Cache bust — increment when code changes need to bypass Railway layer cache
+ARG CACHEBUST=2
 COPY . .
 
 # Railway injects PORT=8080; EXPOSE must match so the edge proxy routes correctly
