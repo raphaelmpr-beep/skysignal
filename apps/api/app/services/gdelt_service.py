@@ -5,8 +5,11 @@ GDELTService — integration with the GDELT 2.0 Doc API.
 from __future__ import annotations
 
 import logging
+import random
 import re
+import time
 from datetime import datetime, timezone
+from datetime import timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -26,6 +29,7 @@ class GDELTService:
     """
 
     BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
+    MAX_BACKOFF_SECONDS = 8.0
 
     def __init__(self) -> None:
         self.last_status_code: int | None = None
@@ -68,6 +72,82 @@ class GDELTService:
 
         return None, None
 
+    def _parse_compact_utc(self, value: str) -> datetime:
+        return datetime.strptime(value, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+
+    def _format_compact_utc(self, value: datetime) -> str:
+        return value.astimezone(timezone.utc).strftime("%Y%m%d%H%M%S")
+
+    def _window_size_for_span(self, span: timedelta) -> timedelta:
+        if span >= timedelta(days=7):
+            return timedelta(hours=6)
+        if span >= timedelta(days=2):
+            return timedelta(hours=4)
+        if span >= timedelta(days=1):
+            return timedelta(hours=2)
+        return timedelta(hours=1)
+
+    def _build_windows(self, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+        if end <= start:
+            return [(start, end)]
+
+        step = self._window_size_for_span(end - start)
+        windows: list[tuple[datetime, datetime]] = []
+        cursor = end
+        while cursor > start:
+            left = max(start, cursor - step)
+            windows.append((left, cursor))
+            cursor = left
+        return windows
+
+    def _request_with_backoff(
+        self,
+        *,
+        client: httpx.Client,
+        params: dict,
+        attempts: int = 4,
+    ) -> dict | None:
+        for attempt in range(1, attempts + 1):
+            try:
+                resp = client.get(
+                    self.BASE_URL,
+                    params=params,
+                    headers={"User-Agent": "SkySignal/1.0 (+https://skysignal.vercel.app)"},
+                )
+                self.last_status_code = resp.status_code
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as exc:
+                self.last_status_code = exc.response.status_code
+                self.last_error = str(exc)
+
+                retryable = exc.response.status_code in (408, 409, 425, 429, 500, 502, 503, 504)
+                if not retryable or attempt == attempts:
+                    logger.warning("GDELT search request failed: %s", exc)
+                    return None
+
+                base_delay = min(self.MAX_BACKOFF_SECONDS, 0.6 * (2 ** (attempt - 1)))
+                jitter = random.uniform(0.2, 0.8)
+                sleep_for = min(self.MAX_BACKOFF_SECONDS, base_delay + jitter)
+                logger.warning(
+                    "GDELT request retrying after status=%s attempt=%s/%s sleep=%.2fs",
+                    exc.response.status_code,
+                    attempt,
+                    attempts,
+                    sleep_for,
+                )
+                time.sleep(sleep_for)
+            except Exception as exc:
+                self.last_error = str(exc)
+                if attempt == attempts:
+                    logger.warning("GDELT search request failed: %s", exc)
+                    return None
+                base_delay = min(self.MAX_BACKOFF_SECONDS, 0.4 * (2 ** (attempt - 1)))
+                jitter = random.uniform(0.1, 0.6)
+                time.sleep(min(self.MAX_BACKOFF_SECONDS, base_delay + jitter))
+
+        return None
+
     def search(self, query: str, date_from: str, date_to: str, limit: int = 100) -> list[dict]:
         """
         Search GDELT for relevant articles.
@@ -88,54 +168,70 @@ class GDELTService:
             "mode": "artlist",
             "format": "json",
             "sort": "DateDesc",
-            "startdatetime": date_from,
-            "enddatetime": date_to,
         }
 
         requested_limit = max(1, min(int(limit), 250))
-        candidate_limits = [requested_limit, min(requested_limit, 25), 5]
+        candidate_limits = [min(requested_limit, 50), 25, 10, 5]
         candidate_limits = list(dict.fromkeys(candidate_limits))
 
-        payload = None
-        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-            for maxrecords in candidate_limits:
-                params = {**base_params, "maxrecords": maxrecords}
-                try:
-                    resp = client.get(
-                        self.BASE_URL,
-                        params=params,
-                        headers={"User-Agent": "SkySignal/1.0 (+https://skysignal.vercel.app)"},
-                    )
-                    self.last_status_code = resp.status_code
-                    resp.raise_for_status()
-                    payload = resp.json()
-                    break
-                except httpx.HTTPStatusError as exc:
-                    self.last_status_code = exc.response.status_code
-                    self.last_error = str(exc)
-                    # If throttled, retry once/twice with smaller maxrecords.
-                    if exc.response.status_code == 429 and maxrecords != candidate_limits[-1]:
-                        logger.warning(
-                            "GDELT rate-limited at maxrecords=%s; retrying with smaller page",
-                            maxrecords,
-                        )
-                        continue
-                    logger.warning("GDELT search request failed: %s", exc)
-                    return []
-                except Exception as exc:
-                    self.last_error = str(exc)
-                    logger.warning("GDELT search request failed: %s", exc)
-                    return []
-
-        if payload is None:
+        try:
+            start_dt = self._parse_compact_utc(date_from)
+            end_dt = self._parse_compact_utc(date_to)
+        except ValueError:
+            self.last_error = "Invalid datetime window for GDELT search"
             return []
 
-        articles = payload.get("articles") or payload.get("ArticleList") or []
-        if not isinstance(articles, list):
+        windows = self._build_windows(start_dt, end_dt)
+        found_rows: list[dict] = []
+        seen_urls: set[str] = set()
+        had_success = False
+
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            for left, right in windows:
+                for maxrecords in candidate_limits:
+                    params = {
+                        **base_params,
+                        "startdatetime": self._format_compact_utc(left),
+                        "enddatetime": self._format_compact_utc(right),
+                        "maxrecords": maxrecords,
+                    }
+                    payload = self._request_with_backoff(client=client, params=params)
+                    if payload is None:
+                        # If this combination failed, keep trying with tighter requests.
+                        continue
+
+                    had_success = True
+                    articles = payload.get("articles") or payload.get("ArticleList") or []
+                    if not isinstance(articles, list):
+                        continue
+
+                    for row in articles:
+                        if not isinstance(row, dict):
+                            continue
+                        url = str(row.get("url") or "").strip()
+                        if url and url in seen_urls:
+                            continue
+                        if url:
+                            seen_urls.add(url)
+                        found_rows.append(row)
+
+                        if len(found_rows) >= requested_limit:
+                            break
+
+                    if len(found_rows) >= requested_limit:
+                        break
+                if len(found_rows) >= requested_limit:
+                    break
+
+        if had_success and self.last_status_code == 429:
+            # Last attempt may have been rate-limited, but we still gathered data.
+            self.last_error = None
+
+        if not found_rows:
             return []
 
         normalized: list[dict] = []
-        for row in articles:
+        for row in found_rows:
             if not isinstance(row, dict):
                 continue
             url = str(row.get("url") or "").strip()
