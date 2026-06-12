@@ -74,7 +74,7 @@ def list_incidents(
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
-    source_tag: Optional[str] = Query(None, description="Filter by source tag: 'faa', 'gdelt', 'osint', 'dfend', 'manual'"),
+    source_tag: Optional[str] = Query(None, description="Filter by tag: faa/gdelt/osint/dfend/manual"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -133,15 +133,9 @@ def list_incidents(
             )
         )
 
-    # Source tag filter — uses Postgres ANY() against the text[] array
+    # Source tag filter
     if source_tag:
-        TAG_MAP = {
-            "faa":    "faa",
-            "gdelt":  "gdelt",
-            "osint":  "osint",
-            "dfend":  "dfend",
-            "manual": "manual-seed",
-        }
+        TAG_MAP = {"faa": "faa", "gdelt": "gdelt", "osint": "osint", "dfend": "dfend", "manual": "manual-seed"}
         tag = TAG_MAP.get(source_tag.lower(), source_tag.lower())
         q = q.filter(text(":tag = ANY(tags)").bindparams(tag=tag))
 
