@@ -276,7 +276,7 @@ class GDELTService:
             db.query(Source)
             .filter(
                 Source.org_id == org_id,
-                Source.source_type.ilike("GDELT"),
+                Source.source_type == "GDELT",
             )
             .first()
         )
