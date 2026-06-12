@@ -243,5 +243,8 @@ def ingest_gdelt(
         "date_to": date_to,
         "fetched": len(results),
         "created": len(incident_ids),
+        "upstream_status_code": gdelt_svc.last_status_code,
+        "upstream_error": gdelt_svc.last_error,
+        "rate_limited": gdelt_svc.last_status_code == 429,
         "incident_ids": incident_ids,
     }
