@@ -88,7 +88,7 @@ def health():
         logger.error(f"Health DB check failed: {e}")
         db_status = "unreachable"
         db_error = str(e)[:200]
-    payload = {"status": "ok", "service": "skysignal-api", "version": "1.0.0", "db": db_status}
+    payload = {"status": "ok", "service": "skysignal-api", "version": "1.1.0", "db": db_status}
     if db_error:
         payload["db_error"] = db_error
     return payload
