@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import AuditLog, Incident
+from app.models import AuditLog, Incident, User
 from app.schemas import IncidentListItem, IncidentRead
 from app.services.confidence_service import ConfidenceService
 from app.services.gdelt_service import GDELTService
@@ -27,6 +27,15 @@ VALID_REVIEW_ACTIONS = {
     "merge_duplicate": "DISMISSED",
     "request_more_review": "NEEDS_REVIEW",
 }
+
+
+def _audit_user_id_or_none(db: Session, current_user: dict) -> str | None:
+    """Return a valid user_id for audit logs, otherwise None."""
+    user_id = current_user.get("user_id")
+    if not user_id:
+        return None
+    exists = db.query(User.id).filter(User.id == user_id).first()
+    return user_id if exists else None
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +109,7 @@ def review_incident(
 
     log = AuditLog(
         org_id=current_user["org_id"],
-        user_id=current_user.get("user_id"),
+        user_id=_audit_user_id_or_none(db, current_user),
         incident_id=incident_id,
         action=f"REVIEW_{action.upper()}",
         entity_type="incident",
@@ -138,7 +147,7 @@ def recompute_confidence(
 
     log = AuditLog(
         org_id=current_user["org_id"],
-        user_id=current_user.get("user_id"),
+        user_id=_audit_user_id_or_none(db, current_user),
         incident_id=incident_id,
         action="RECOMPUTE_CONFIDENCE",
         entity_type="incident",
@@ -209,7 +218,7 @@ def ingest_gdelt(
 
     log = AuditLog(
         org_id=current_user["org_id"],
-        user_id=current_user.get("user_id"),
+        user_id=_audit_user_id_or_none(db, current_user),
         action="INGEST_GDELT",
         entity_type="incident",
         entity_id=incident_ids[0] if incident_ids else None,
