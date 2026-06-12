@@ -135,25 +135,30 @@ def list_incidents(
 
     # Source tag filter
     if source_tag:
-        TAG_MAP = {"faa": "faa", "gdelt": "gdelt", "osint": "osint", "dfend": "dfend", "manual": "manual-seed"}
-        tag = TAG_MAP.get(source_tag.lower(), source_tag.lower())
-        if tag == "gdelt":
-            # Fallback for historical records where tags may be missing/incomplete.
+        t = source_tag.lower()
+        if t in ("osint", "gdelt"):
+            # OSINT / GDELT — match osint-tagged, gdelt-tagged, or gdelt source records
             q = q.filter(
                 or_(
-                    text(":tag = ANY(tags)").bindparams(tag=tag),
+                    text("'osint' = ANY(tags)"),
+                    text("'gdelt' = ANY(tags)"),
                     Incident.source_url.ilike("%gdelt%"),
                     Incident.source.has(
                         or_(
                             cast(Source.source_type, String).ilike("GDELT"),
                             Source.name.ilike("%gdelt%"),
-                            Source.url.ilike("%gdelt%"),
                         )
                     ),
                 )
             )
+        elif t == "dfend":
+            q = q.filter(text("'dfend' = ANY(tags)"))
+        elif t == "faa":
+            q = q.filter(text("'faa' = ANY(tags)"))
+        elif t == "manual":
+            q = q.filter(text("'manual-seed' = ANY(tags)"))
         else:
-            q = q.filter(text(":tag = ANY(tags)").bindparams(tag=tag))
+            q = q.filter(text(":tag = ANY(tags)").bindparams(tag=t))
 
     # Geo filter using bounding box (no PostGIS)
     if lat is not None and lon is not None and radius_miles is not None:

@@ -252,8 +252,7 @@ export default function IncidentsPage() {
               <SelectContent>
                 <SelectItem value="_all">All Sources</SelectItem>
                 <SelectItem value="faa">FAA Reports</SelectItem>
-                <SelectItem value="gdelt">GDELT / OSINT</SelectItem>
-                <SelectItem value="osint">OSINT (Manual)</SelectItem>
+                <SelectItem value="osint">OSINT / GDELT</SelectItem>
                 <SelectItem value="dfend">D-Fend Enrichment</SelectItem>
                 <SelectItem value="manual">Manual Seed</SelectItem>
               </SelectContent>
