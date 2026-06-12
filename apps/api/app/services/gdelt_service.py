@@ -27,6 +27,10 @@ class GDELTService:
 
     BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 
+    def __init__(self) -> None:
+        self.last_status_code: int | None = None
+        self.last_error: str | None = None
+
     def _parse_seen_date(self, seen_date: str | None) -> datetime | None:
         if not seen_date:
             return None
@@ -76,27 +80,54 @@ class GDELTService:
         Returns:
             List of normalized article dicts.
         """
-        params = {
+        self.last_status_code = None
+        self.last_error = None
+
+        base_params = {
             "query": query,
             "mode": "artlist",
             "format": "json",
             "sort": "DateDesc",
-            "maxrecords": max(1, min(int(limit), 250)),
             "startdatetime": date_from,
             "enddatetime": date_to,
         }
 
-        try:
-            with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-                resp = client.get(
-                    self.BASE_URL,
-                    params=params,
-                    headers={"User-Agent": "SkySignal/1.0 (+https://skysignal.vercel.app)"},
-                )
-                resp.raise_for_status()
-                payload = resp.json()
-        except Exception as exc:
-            logger.warning("GDELT search request failed: %s", exc)
+        requested_limit = max(1, min(int(limit), 250))
+        candidate_limits = [requested_limit, min(requested_limit, 25), 5]
+        candidate_limits = list(dict.fromkeys(candidate_limits))
+
+        payload = None
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            for maxrecords in candidate_limits:
+                params = {**base_params, "maxrecords": maxrecords}
+                try:
+                    resp = client.get(
+                        self.BASE_URL,
+                        params=params,
+                        headers={"User-Agent": "SkySignal/1.0 (+https://skysignal.vercel.app)"},
+                    )
+                    self.last_status_code = resp.status_code
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    break
+                except httpx.HTTPStatusError as exc:
+                    self.last_status_code = exc.response.status_code
+                    self.last_error = str(exc)
+                    # If throttled, retry once/twice with smaller maxrecords.
+                    if exc.response.status_code == 429 and maxrecords != candidate_limits[-1]:
+                        logger.warning(
+                            "GDELT rate-limited at maxrecords=%s; retrying with smaller page",
+                            maxrecords,
+                        )
+                        continue
+                    logger.warning("GDELT search request failed: %s", exc)
+                    return []
+                except Exception as exc:
+                    self.last_error = str(exc)
+                    logger.warning("GDELT search request failed: %s", exc)
+                    return []
+
+        if payload is None:
             return []
 
         articles = payload.get("articles") or payload.get("ArticleList") or []
