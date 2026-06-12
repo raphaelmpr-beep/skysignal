@@ -10,7 +10,7 @@ from typing import Optional
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, or_, text
+from sqlalchemy import String, and_, cast, or_, text
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -145,7 +145,7 @@ def list_incidents(
                     Incident.source_url.ilike("%gdelt%"),
                     Incident.source.has(
                         or_(
-                            Source.source_type.ilike("GDELT"),
+                            cast(Source.source_type, String).ilike("GDELT"),
                             Source.name.ilike("%gdelt%"),
                             Source.url.ilike("%gdelt%"),
                         )
