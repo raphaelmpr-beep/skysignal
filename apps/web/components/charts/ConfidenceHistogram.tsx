@@ -17,19 +17,19 @@ interface ConfidenceHistogramProps {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  VERY_HIGH: '#2E9E5B',
+  VERIFIED: '#2E9E5B',
   HIGH: '#00B4C8',
   MEDIUM: '#F0A500',
   LOW: '#E05C1A',
-  VERY_LOW: '#EF4444',
+  UNVERIFIED: '#EF4444',
 }
 
 const TIER_LABELS: Record<string, string> = {
-  VERY_HIGH: 'Very High',
+  VERIFIED: 'Verified',
   HIGH: 'High',
   MEDIUM: 'Medium',
   LOW: 'Low',
-  VERY_LOW: 'Very Low',
+  UNVERIFIED: 'Unverified',
 }
 
 export function ConfidenceHistogram({ data, height = 200 }: ConfidenceHistogramProps) {

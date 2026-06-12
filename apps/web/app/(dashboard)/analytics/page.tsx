@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
           {loading ? (
             <Skeleton className="h-56 w-full" />
           ) : (
-            <IncidentTimeline data={timeline} stacked />
+            <IncidentTimeline data={timeline} />
           )}
         </CardContent>
       </Card>

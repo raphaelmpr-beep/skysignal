@@ -88,6 +88,18 @@ export function IncidentTable({ incidents, loading, compact, onRowClick }: Incid
                   {truncate(incident.summary, 80)}
                 </p>
               )}
+              {!compact && incident.source_url && (
+                <a
+                  href={incident.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-xs text-teal/70 hover:text-teal mt-0.5 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Source
+                </a>
+              )}
             </TableCell>
             {!compact && (
               <TableCell>

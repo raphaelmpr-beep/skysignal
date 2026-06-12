@@ -27,6 +27,7 @@ export interface Incident {
   region?: string
   country?: string
   tags?: string[]
+  source_url?: string | null
   sector?: string
   occurred_at: string
   created_at: string
