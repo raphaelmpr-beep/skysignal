@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import AuditLog, Incident, IncidentEvidence
+from app.models import AuditLog, Incident, IncidentEvidence, Source
 from app.schemas import (
     EvidenceCreate,
     EvidenceRead,
@@ -137,7 +137,23 @@ def list_incidents(
     if source_tag:
         TAG_MAP = {"faa": "faa", "gdelt": "gdelt", "osint": "osint", "dfend": "dfend", "manual": "manual-seed"}
         tag = TAG_MAP.get(source_tag.lower(), source_tag.lower())
-        q = q.filter(text(":tag = ANY(tags)").bindparams(tag=tag))
+        if tag == "gdelt":
+            # Fallback for historical records where tags may be missing/incomplete.
+            q = q.filter(
+                or_(
+                    text(":tag = ANY(tags)").bindparams(tag=tag),
+                    Incident.source_url.ilike("%gdelt%"),
+                    Incident.source.has(
+                        or_(
+                            Source.source_type.ilike("GDELT"),
+                            Source.name.ilike("%gdelt%"),
+                            Source.url.ilike("%gdelt%"),
+                        )
+                    ),
+                )
+            )
+        else:
+            q = q.filter(text(":tag = ANY(tags)").bindparams(tag=tag))
 
     # Geo filter using bounding box (no PostGIS)
     if lat is not None and lon is not None and radius_miles is not None:

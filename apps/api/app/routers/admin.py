@@ -5,6 +5,8 @@ Review queue and incident management.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -13,9 +15,11 @@ from app.db import get_db
 from app.models import AuditLog, Incident
 from app.schemas import IncidentListItem, IncidentRead
 from app.services.confidence_service import ConfidenceService
+from app.services.gdelt_service import GDELTService
 
 router = APIRouter()
 conf_svc = ConfidenceService()
+gdelt_svc = GDELTService()
 
 VALID_REVIEW_ACTIONS = {
     "approve": "VERIFIED",
@@ -146,3 +150,89 @@ def recompute_confidence(
 
     db.refresh(inc)
     return {"incident_id": incident_id, "confidence_score": new_score, "confidence_tier": inc.confidence_tier}
+
+
+# ---------------------------------------------------------------------------
+# GDELT backfill / ingest
+# ---------------------------------------------------------------------------
+
+@router.post("/gdelt/ingest", response_model=dict)
+def ingest_gdelt(
+    body: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    One-click ingestion of recent GDELT events into PENDING incidents.
+
+    Optional body params:
+      - days (int, default 7, range 1..30)
+      - max_records (int, default 100, range 1..250)
+      - query (str, default broad drone query)
+    """
+    payload = body or {}
+
+    try:
+        days = int(payload.get("days", 7))
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(days, 30))
+
+    try:
+        max_records = int(payload.get("max_records", 100))
+    except (TypeError, ValueError):
+        max_records = 100
+    max_records = max(1, min(max_records, 250))
+
+    query = str(
+        payload.get("query")
+        or "drone OR uav OR unmanned aircraft OR quadcopter OR counter-UAS"
+    ).strip()
+
+    end_dt = datetime.now(timezone.utc)
+    start_dt = end_dt - timedelta(days=days)
+
+    date_from = start_dt.strftime("%Y%m%d%H%M%S")
+    date_to = end_dt.strftime("%Y%m%d%H%M%S")
+
+    results = gdelt_svc.search(
+        query=query,
+        date_from=date_from,
+        date_to=date_to,
+        limit=max_records,
+    )
+    incident_ids = gdelt_svc.create_candidate_incidents(
+        results=results,
+        org_id=current_user["org_id"],
+        db=db,
+    )
+
+    log = AuditLog(
+        org_id=current_user["org_id"],
+        user_id=current_user.get("user_id"),
+        action="INGEST_GDELT",
+        entity_type="incident",
+        entity_id=incident_ids[0] if incident_ids else None,
+        details={
+            "query": query,
+            "days": days,
+            "max_records": max_records,
+            "date_from": date_from,
+            "date_to": date_to,
+            "fetched": len(results),
+            "created": len(incident_ids),
+        },
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "query": query,
+        "days": days,
+        "max_records": max_records,
+        "date_from": date_from,
+        "date_to": date_to,
+        "fetched": len(results),
+        "created": len(incident_ids),
+        "incident_ids": incident_ids,
+    }
