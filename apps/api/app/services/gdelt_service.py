@@ -293,11 +293,25 @@ class GDELTService:
             db.add(gdelt_source)
             db.flush()
 
+        import re
+
+        def _title_fingerprint(t: str) -> str:
+            """Normalize title to a dedup key: lowercase, strip punctuation/stopwords."""
+            t = t.lower()
+            t = re.sub(r'\[.*?\]|\(.*?\)', '', t)  # strip [GDELT] prefix, parens
+            t = re.sub(r'[^a-z0-9\s]', '', t)
+            stopwords = {'a','an','the','in','on','at','of','for','to','is','was',
+                         'and','or','with','near','over','by','from','into','after'}
+            words = [w for w in t.split() if w not in stopwords and len(w) > 2]
+            return ' '.join(sorted(words[:12]))  # order-independent, first 12 keywords
+
         candidate_urls = [
             str(a.get("url") or "").strip()
             for a in results
             if str(a.get("url") or "").strip()
         ]
+
+        # Exact URL dedup against DB
         existing_urls = set()
         if candidate_urls:
             existing_urls = {
@@ -311,11 +325,42 @@ class GDELTService:
                 if u
             }
 
-        incident_ids: list[str] = []
+        # Fuzzy title dedup — pull recent GDELT/RSS incident title fingerprints from DB
+        from sqlalchemy import text as sa_text
+        from datetime import timedelta
+        recent_titles_raw = db.execute(
+            sa_text("""
+                SELECT title FROM incidents
+                WHERE org_id = :org_id
+                  AND ('gdelt' = ANY(tags) OR 'osint' = ANY(tags))
+                  AND occurred_at >= NOW() - INTERVAL '60 days'
+            """),
+            {"org_id": org_id},
+        ).fetchall()
+        existing_fingerprints: set[str] = {
+            _title_fingerprint(r[0]) for r in recent_titles_raw if r[0]
+        }
+
+        # Cross-feed dedup within current batch — deduplicate by URL then by title fingerprint
+        batch_fingerprints: set[str] = set()
+        deduped_results: list[dict] = []
         for article in results:
+            url = str(article.get("url") or "").strip()
+            title = str(article.get("title") or "").strip()
+            if url in existing_urls:
+                continue
+            fp = _title_fingerprint(title)
+            if fp in existing_fingerprints or fp in batch_fingerprints:
+                logger.debug("Dedup skip (fuzzy title match): %s", title[:80])
+                continue
+            batch_fingerprints.add(fp)
+            deduped_results.append(article)
+
+        incident_ids: list[str] = []
+        for article in deduped_results:
             title = article.get("title", "GDELT Candidate Incident")
             url = str(article.get("url") or "").strip()
-            if not url or url in existing_urls:
+            if not url:
                 continue
 
             seen_date = article.get("seendate")

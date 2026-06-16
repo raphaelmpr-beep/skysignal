@@ -23,6 +23,7 @@ Sources:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from xml.etree import ElementTree as ET
@@ -33,6 +34,29 @@ import httpx
 logger = logging.getLogger(__name__)
 
 _UA = "Mozilla/5.0 (compatible; SkySignal/1.1; +https://skysignal.vercel.app)"
+
+# Stopwords stripped when building a title fingerprint
+_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "by", "for",
+    "from", "has", "have", "in", "is", "it", "its", "of", "on", "or",
+    "that", "the", "this", "to", "was", "were", "with", "new", "says",
+    "report", "reports", "reported", "over", "after", "amid", "about",
+    "into", "how", "what", "when", "where", "who", "why", "will",
+}
+
+
+def _title_fingerprint(title: str) -> str:
+    """Produce an order-independent keyword fingerprint for cross-feed dedup.
+    Strips source prefixes like '[sUAS News]', punctuation, stopwords,
+    and short tokens; then sorts remaining words so minor reordering
+    (e.g. headline vs. body copy) doesn't break the match."""
+    t = re.sub(r"^\[[^\]]+\]\s*", "", title)  # strip [Source] prefix
+    t = re.sub(r"[^\w\s]", " ", t.lower())      # punctuation → space
+    words = [
+        w for w in t.split()
+        if len(w) >= 4 and w not in _STOPWORDS
+    ]
+    return " ".join(sorted(set(words[:18])))  # top-18 unique, sorted
 
 
 def _gnews(query: str) -> str:
@@ -116,6 +140,7 @@ class RSSFallbackService:
 
         rows: list[dict] = []
         seen_urls: set[str] = set()
+        seen_fingerprints: set[str] = set()   # cross-feed fuzzy title dedup
         feed_stats: dict[str, int] = {}
 
         with httpx.Client(
@@ -158,7 +183,17 @@ class RSSFallbackService:
                     if not self._is_relevant(title, description, category):
                         continue
 
+                    # Cross-feed fuzzy dedup: skip near-duplicate titles
+                    fp = _title_fingerprint(title)
+                    if fp and fp in seen_fingerprints:
+                        logger.debug(
+                            "Dedup skip (title match) [%s]: %s", feed_name, title[:80]
+                        )
+                        continue
+
                     seen_urls.add(url)
+                    if fp:
+                        seen_fingerprints.add(fp)
                     feed_count += 1
                     rows.append({
                         "title": title,

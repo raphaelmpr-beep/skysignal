@@ -184,18 +184,43 @@ export async function fetchSankeyData(): Promise<SankeyData> {
   return apiFetch<SankeyData>('/api/analytics/sankey')
 }
 
+/** Normalize a raw sector-count map to SectorDistributionItem[], filtering UNKNOWN */
+function normalizeSectorMap(
+  map: Record<string, number>
+): SectorDistributionItem[] {
+  const entries = Object.entries(map).filter(
+    ([sector]) => sector !== 'UNKNOWN' && sector !== ''
+  )
+  const total = entries.reduce((s, [, n]) => s + n, 0) || 1
+  return entries
+    .map(([sector, count]) => ({ sector, count, percentage: (count / total) * 100 }))
+    .sort((a, b) => b.count - a.count)
+}
+
+export interface SectorDistributionBoth {
+  operational: SectorDistributionItem[]
+  cisa: SectorDistributionItem[]
+}
+
+/** Returns both operational and CISA sector breakdowns (UNKNOWN excluded) */
 export async function fetchSectorDistribution(): Promise<SectorDistributionItem[]> {
-  // Backend returns { cisa_sector: {ENERGY: N, ...}, operational_sector: {...} }
-  // Normalize to SectorDistributionItem[] using operational_sector
   const raw = await apiFetch<Record<string, Record<string, number>> | SectorDistributionItem[]>('/api/analytics/sector-distribution')
   if (Array.isArray(raw)) return raw
   const sectorMap = (raw as Record<string, Record<string, number>>).operational_sector
     ?? (raw as Record<string, Record<string, number>>).cisa_sector
     ?? {}
-  const total = Object.values(sectorMap).reduce((s, n) => s + n, 0) || 1
-  return Object.entries(sectorMap)
-    .map(([sector, count]) => ({ sector, count, percentage: (count / total) * 100 }))
-    .sort((a, b) => b.count - a.count)
+  return normalizeSectorMap(sectorMap)
+}
+
+/** Returns both operational and CISA sector arrays for the dual-tab chart */
+export async function fetchSectorDistributionBoth(): Promise<SectorDistributionBoth> {
+  const raw = await apiFetch<Record<string, Record<string, number>> | SectorDistributionItem[]>('/api/analytics/sector-distribution')
+  if (Array.isArray(raw)) return { operational: raw, cisa: [] }
+  const r = raw as Record<string, Record<string, number>>
+  return {
+    operational: normalizeSectorMap(r.operational_sector ?? {}),
+    cisa: normalizeSectorMap(r.cisa_sector ?? {}),
+  }
 }
 
 export async function fetchConfidenceDistribution(): Promise<{ tier: string; count: number }[]> {

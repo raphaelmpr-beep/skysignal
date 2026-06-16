@@ -14,7 +14,7 @@ import dynamic from 'next/dynamic'
 import {
   fetchAnalyticsKPI,
   fetchTimeline,
-  fetchSectorDistribution,
+  fetchSectorDistributionBoth,
   fetchConfidenceDistribution,
   fetchSourceDistribution,
   fetchSankeyData,
@@ -32,6 +32,7 @@ export default function AnalyticsPage() {
   const [kpi, setKpi] = useState<KPIData | null>(null)
   const [timeline, setTimeline] = useState<TimelineDataPoint[]>([])
   const [sector, setSector] = useState<SectorDistributionItem[]>([])
+  const [sectorCisa, setSectorCisa] = useState<SectorDistributionItem[]>([])
   const [confidence, setConfidence] = useState<{ tier: string; count: number }[]>([])
   const [sources, setSources] = useState<{ source: string; count: number }[]>([])
   const [sankey, setSankey] = useState<SankeyData | null>(null)
@@ -44,14 +45,17 @@ export default function AnalyticsPage() {
       const results = await Promise.allSettled([
         fetchAnalyticsKPI(),
         fetchTimeline(parseInt(timelineDays)),
-        fetchSectorDistribution(),
+        fetchSectorDistributionBoth(),
         fetchConfidenceDistribution(),
         fetchSourceDistribution(),
         fetchSankeyData(),
       ])
       if (results[0].status === 'fulfilled') setKpi(results[0].value)
       if (results[1].status === 'fulfilled') setTimeline(results[1].value)
-      if (results[2].status === 'fulfilled') setSector(results[2].value)
+      if (results[2].status === 'fulfilled') {
+        setSector(results[2].value.operational)
+        setSectorCisa(results[2].value.cisa)
+      }
       if (results[3].status === 'fulfilled') setConfidence(results[3].value)
       if (results[4].status === 'fulfilled') setSources(results[4].value)
       if (results[5].status === 'fulfilled') setSankey(results[5].value)
@@ -127,7 +131,11 @@ export default function AnalyticsPage() {
             <CardTitle className="text-sm">By Sector</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? <Skeleton className="h-48 w-full" /> : <SectorDistribution data={sector} height={200} />}
+            {loading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : (
+              <SectorDistribution data={sector} cisaData={sectorCisa} height={220} />
+            )}
           </CardContent>
         </Card>
 
