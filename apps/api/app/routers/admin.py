@@ -159,15 +159,27 @@ def _ingest_for_org(
         date_to=date_to,
         limit=max_records,
     )
-    provider_used = "gdelt"
-    results = gdelt_results
 
-    should_fallback = gdelt_svc.last_status_code == 429 or not gdelt_results
-    if should_fallback:
-        fallback_results = rss_svc.search(query=query, days=days, limit=max(5, min(max_records, 50)))
-        if fallback_results:
-            results = fallback_results
-            provider_used = "rss_fallback"
+    # Always run RSS feeds in parallel — not just as fallback.
+    # This maximizes coverage: GDELT provides structured geo-tagged articles,
+    # RSS provides specialist defense/UAS publications with higher precision.
+    rss_results = rss_svc.search(query=query, days=days, limit=max(10, min(max_records, 75)))
+
+    if gdelt_results and rss_results:
+        # Deduplicate by URL before merging
+        seen = {r["url"] for r in gdelt_results}
+        unique_rss = [r for r in rss_results if r.get("url") not in seen]
+        results = gdelt_results + unique_rss
+        provider_used = "gdelt+rss"
+    elif gdelt_results:
+        results = gdelt_results
+        provider_used = "gdelt"
+    elif rss_results:
+        results = rss_results
+        provider_used = "rss_multi"
+    else:
+        results = []
+        provider_used = "none"
 
     incident_ids = gdelt_svc.create_candidate_incidents(
         results=results,
@@ -197,7 +209,7 @@ def _ingest_for_org(
     log = AuditLog(
         org_id=org_id,
         user_id=user_id,
-        action=("INGEST_GDELT_FALLBACK" if provider_used == "rss_fallback" else source_action),
+        action=("INGEST_RSS_MULTI" if provider_used in ("rss_multi", "gdelt+rss") else source_action),
         entity_type="incident",
         entity_id=incident_ids[0] if incident_ids else None,
         details=response_payload,
@@ -472,4 +484,43 @@ def scheduled_status(
         "cache_ttl_seconds": cache_ttl_seconds,
         "last_ingest_at": latest.created_at if latest else None,
         "last_ingest_action": latest.action if latest else None,
+    }
+
+
+@router.get("/feeds/status", response_model=dict)
+def feeds_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Check health of all configured news feed sources (GDELT + RSS multi-feed)."""
+    import httpx
+
+    # Check GDELT API availability
+    gdelt_ok = False
+    gdelt_status = None
+    try:
+        r = httpx.get(
+            "https://api.gdeltproject.org/api/v2/doc/doc?query=drone&mode=ArtList&maxrecords=1&format=json",
+            timeout=8.0,
+            headers={"User-Agent": "SkySignal/1.1"},
+        )
+        gdelt_status = r.status_code
+        gdelt_ok = r.status_code == 200
+    except Exception as exc:
+        gdelt_status = str(exc)[:80]
+
+    # Check all RSS feeds
+    rss_feed_status = rss_svc.get_feed_status()
+    rss_ok = sum(1 for f in rss_feed_status if f["ok"])
+
+    return {
+        "gdelt": {
+            "ok": gdelt_ok,
+            "status": gdelt_status,
+        },
+        "rss_feeds": {
+            "total": len(rss_feed_status),
+            "ok": rss_ok,
+            "feeds": rss_feed_status,
+        },
+        "summary": f"GDELT: {'✓' if gdelt_ok else '✗'} | RSS: {rss_ok}/{len(rss_feed_status)} feeds healthy",
     }
