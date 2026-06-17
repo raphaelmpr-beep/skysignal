@@ -136,19 +136,14 @@ def list_incidents(
     # Source tag filter
     if source_tag:
         t = source_tag.lower()
-        if t in ("osint", "gdelt"):
-            # OSINT / GDELT — match osint-tagged, gdelt-tagged, or gdelt source records
+        if t in ("osint", "gdelt", "news"):
+            # News / OSINT — match news-ingested, osint, gdelt tags or gdelt source URLs
             q = q.filter(
                 or_(
+                    text("'news-ingested' = ANY(tags)"),
                     text("'osint' = ANY(tags)"),
                     text("'gdelt' = ANY(tags)"),
                     Incident.source_url.ilike("%gdelt%"),
-                    Incident.source.has(
-                        or_(
-                            cast(Source.source_type, String).ilike("GDELT"),
-                            Source.name.ilike("%gdelt%"),
-                        )
-                    ),
                 )
             )
         elif t == "dfend":

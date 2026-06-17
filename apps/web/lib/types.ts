@@ -200,7 +200,7 @@ export interface IncidentFilters {
   date_to?: string
   country?: string
   region?: string
-  source_tag?: 'faa' | 'gdelt' | 'osint' | 'dfend' | 'manual'
+  source_tag?: 'faa' | 'gdelt' | 'osint' | 'news' | 'dfend' | 'manual'
   page?: number
   per_page?: number
   sort_by?: string

@@ -114,6 +114,17 @@ export default function IncidentDetailPage() {
                 {incident.location_name}
               </span>
             )}
+            {incident.source_url && (
+              <a
+                href={incident.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-teal hover:text-teal/80 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                View Source Article
+              </a>
+            )}
           </div>
         </div>
 
@@ -365,6 +376,19 @@ export default function IncidentDetailPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Nearby (50mi)</span>
                   <span className="text-foreground">{incident.nearby_count}</span>
+                </div>
+              )}
+              {incident.source_url && (
+                <div className="pt-1 border-t border-white/[0.06]">
+                  <a
+                    href={incident.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm text-teal hover:text-teal/80 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Source Article</span>
+                  </a>
                 </div>
               )}
             </CardContent>

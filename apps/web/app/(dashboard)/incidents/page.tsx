@@ -246,13 +246,13 @@ export default function IncidentsPage() {
             </Select>
 
             <Select value={sourceTag} onValueChange={(v) => { setSourceTag(v === '_all' ? '' : v); setPage(1) }}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-48">
                 <SelectValue placeholder="Data Source" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_all">All Sources</SelectItem>
                 <SelectItem value="faa">FAA Reports</SelectItem>
-                <SelectItem value="osint">OSINT / GDELT</SelectItem>
+                <SelectItem value="news">News / OSINT Feeds</SelectItem>
                 <SelectItem value="dfend">D-Fend Enrichment</SelectItem>
                 <SelectItem value="manual">Manual Seed</SelectItem>
               </SelectContent>
